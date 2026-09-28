@@ -4,10 +4,10 @@ from filecmp import cmp
 from os import makedirs
 from shutil import copyfile, rmtree
 from yaml import safe_load
-from libs import Libs
-from kernel import Kernel
-from hardware import Hardware
-from management import Management
+from .libs import Libs
+from .kernel import Kernel
+from .hardware import Hardware
+from .management import Management
 
 class Testcase:
 	def __init__(self, platform_path, testcase_base):

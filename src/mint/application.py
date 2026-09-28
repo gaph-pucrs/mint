@@ -3,7 +3,7 @@ from shutil import copytree
 from os import listdir, environ
 from subprocess import run, check_output
 from multiprocessing import cpu_count
-from repository import Repository
+from .repository import Repository
 from yaml import safe_load
 from hashlib import blake2s
 

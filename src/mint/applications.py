@@ -2,7 +2,7 @@
 from yaml import safe_load
 from os import makedirs
 from shutil import copyfile, rmtree, copytree
-from application import Application
+from .application import Application
 from os.path import exists
 from filecmp import cmp
 

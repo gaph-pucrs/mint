@@ -2,9 +2,9 @@
 from yaml import safe_load
 from os import makedirs
 from shutil import copyfile, rmtree, copytree
-from descriptor import Descriptor
-from application import Application
-from repository import Repository
+from .descriptor import Descriptor
+from .application import Application
+from .repository import Repository
 from os.path import exists
 from filecmp import cmp
 
