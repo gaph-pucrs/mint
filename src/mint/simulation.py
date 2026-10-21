@@ -39,11 +39,7 @@ class Simulation:
         make_env = environ.copy()
         make_env["TRACE"] = "1" if self.with_wave else "0"
 
-        sim_timeout = "SIM_TIMEOUT=run -all"
-        if self.simulator == "verilator":
-            sim_timeout = "SIM_TIMEOUT=+timeout={}".format(self.timeout)
-        elif sim_timeout != 0:
-            sim_timeout = "SIM_TIMEOUT=run {}ms".format(self.timeout)
+        sim_timeout = "SIM_TIMEOUT=+timeout={}".format(self.timeout)
 
         simulation = Popen(["make", "-C", self.scenario_path, "-f", "sim.mk", self.simulator, sim_timeout], env=make_env)
 
