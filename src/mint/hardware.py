@@ -41,8 +41,8 @@ class Hardware:
 		definitions.define("IMEM_PAGE_SZ", str(self.PKG_PAGE_SIZE_INST))
 		definitions.define("DMEM_PAGE_SZ", str(self.PKG_PAGE_SIZE_DATA))
 
-		definitions.define("RAM_DEBUG",     	int(self.__param_or_default("RAM_DEBUG",     "False") == "True"))
-		definitions.define("RS5_DEBUG",     	int(self.__param_or_default("RS5_DEBUG",     "False") == "True"))
+		definitions.macro("RAM_DEBUG",				self.__param_or_default("RAM_DEBUG",     "False") == "True")
+		definitions.macro("RS5_DEBUG",				self.__param_or_default("RS5_DEBUG",     "False") == "True")
 		definitions.define("UART_DEBUG",    	int(self.__param_or_default("UART_DEBUG",     "True") == "True"))
 		definitions.define("SCHED_DEBUG",   	int(self.__param_or_default("SCHED_DEBUG",    "True") == "True"))
 		definitions.define("PIPE_DEBUG",    	int(self.__param_or_default("PIPE_DEBUG",     "True") == "True"))
@@ -110,9 +110,10 @@ class Hardware:
 
 class HardwareDefinitions:
 	def __init__(self):
+		self.macros = []
+		self.macros.append("`ifndef PHIVERS_PKG\n")
+		self.macros.append("`define PHIVERS_PKG\n")
 		self.lines = []
-		self.lines.append("`ifndef PHIVERS_PKG\n")
-		self.lines.append("`define PHIVERS_PKG\n")
 		self.lines.append("package PhiversPkg;\n")
 		self.lines.append("\timport HermesPkg::*;\n")
 
@@ -125,6 +126,11 @@ class HardwareDefinitions:
 		if lint_off is not None:
 			self.lines.append("/* verilator lint_on {} */\n".format(lint_off))
 
+	def macro(self, key, enabled):
+		# Macros, not parameters: Verilator applies a bind even inside a false generate if
+		if enabled:
+			self.macros.append("`define {}\n".format(key))
+
 	def add_peripheral(self, peripheral, x, y, port):
 		self.lines.append("\tparameter logic [15:0] ADDR_{} = 16'h{:02x}{:02x};\n".format(peripheral, x, y))
 		self.lines.append("\tparameter hermes_port_t PORT_{} = {};\n".format(peripheral, port))
@@ -133,5 +139,5 @@ class HardwareDefinitions:
 		self.lines.append("endpackage\n")
 		self.lines.append("`endif\n")
 		file = open(path, "w")
-		file.writelines(self.lines)
+		file.writelines(self.macros + self.lines)
 		file.close()
