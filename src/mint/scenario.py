@@ -41,6 +41,9 @@ class Scenario:
 		# OSZ region (X, Y) anchored at PE 0,0, already validated by the testcase; None when absent
 		osz_window = tc_yaml["hw"].get("osz_window")
 		self.osz_window = tuple(osz_window) if osz_window is not None else None
+		self.PKG_N_PE_X = tc_yaml["hw"]["mpsoc_dimension"][0]
+		self.PKG_N_PE_Y = tc_yaml["hw"]["mpsoc_dimension"][1]
+		self.PKG_MAX_LOCAL_TASKS = tc_yaml["hw"]["tasks_per_PE"]
 
 		self.ma_tasks = []
 
@@ -98,9 +101,11 @@ class Scenario:
 				)
 				secure = False
 
-			self.__check_osz_app_mapping(app_name, mapping, secure)
+			application = Application(app_name, app_inst, platform_path, apps_dir, testcase_path, start_ms=start_ms, mapping=mapping, secure=secure)
 
-			self.applications.append(Application(app_name, app_inst, platform_path, apps_dir, testcase_path, start_ms=start_ms, mapping=mapping, secure=secure))
+			self.__check_osz_app(app_name, len(application.get_tasks()), mapping, secure)
+
+			self.applications.append(application)
 
 		self.applications.sort(key=lambda x: x.start_ms) # Sort by start time
 
@@ -281,37 +286,76 @@ class Scenario:
 		)
 
 	def __check_osz_management(self):
-		"""Management tasks are never secure: none may be pinned inside the OSZ region."""
+		"""Management tasks are never secure: like non-secure tasks they may only
+		be pinned at x >= X+1 (column X, right of the region, stays free)."""
 		if self.osz_window is None:
 			return
 
+		first_x = self.osz_window[0] + 1
 		for task in self.ma_tasks:
 			if "static_mapping" not in task:
 				continue	# Reported later: every management task must be statically mapped
 			x, y = int(task["static_mapping"][0]), int(task["static_mapping"][1])
-			if self.__in_osz(x, y):
+			if x < first_x:
 				raise Exception(
-					"Management task {} is statically mapped to PE {},{}, inside the OSZ region {}. "
-					"Management tasks must be mapped outside it.".format(task["task"], x, y, self.__osz_desc())
+					"Management task {} is statically mapped to PE {},{}. With the OSZ region {} "
+					"management tasks must be mapped at x >= {}.".format(task["task"], x, y, self.__osz_desc(), first_x)
 				)
 
-	def __check_osz_app_mapping(self, app_name, mapping, secure):
-		"""A secure app may only be pinned inside the OSZ region, a non-secure one only outside."""
+	def __check_osz_app(self, app_name, task_cnt, mapping, secure):
+		"""Placement and capacity rules of the OSZ region.
+
+		Secure apps claim whole region rows (X PEs each) and may only be pinned
+		inside the rows they claim. Non-secure apps may only use x >= X+1.
+		An app that does not fit its side would never be mapped.
+		"""
 		if self.osz_window is None:
 			return
 
+		osz_x, osz_y = self.osz_window
+		tpp = self.PKG_MAX_LOCAL_TASKS
+
+		if secure:
+			row_slots = osz_x * tpp
+			rows_needed = -(-task_cnt // row_slots)	# ceil
+			if rows_needed > osz_y:
+				raise Exception(
+					"Secure app {} has {} tasks and needs {} region row(s) of {} slot(s), "
+					"but the OSZ region {} has {} row(s).".format(
+						app_name, task_cnt, rows_needed, row_slots, self.__osz_desc(), osz_y
+					)
+				)
+		else:
+			cols = self.PKG_N_PE_X - osz_x - 1
+			capacity = cols * self.PKG_N_PE_Y * tpp
+			if task_cnt > capacity:
+				raise Exception(
+					"Non-secure app {} has {} tasks, but only {} slot(s) exist at x >= {} "
+					"with the OSZ region {}.".format(app_name, task_cnt, capacity, osz_x + 1, self.__osz_desc())
+				)
+
+		pinned_rows = []
 		for task in mapping:
 			x, y = int(mapping[task][0]), int(mapping[task][1])
-			inside = self.__in_osz(x, y)
-			if secure and not inside:
+			if secure and not self.__in_osz(x, y):
 				raise Exception(
 					"Task {} of secure app {} is statically mapped to PE {},{}, outside the OSZ region {}. "
 					"Secure apps must be mapped inside it.".format(task, app_name, x, y, self.__osz_desc())
 				)
-			if not secure and inside:
+			if not secure and x <= osz_x:
 				raise Exception(
-					"Task {} of non-secure app {} is statically mapped to PE {},{}, inside the OSZ region {}. "
-					"Non-secure apps must be mapped outside it.".format(task, app_name, x, y, self.__osz_desc())
+					"Task {} of non-secure app {} is statically mapped to PE {},{}. With the OSZ region {} "
+					"non-secure apps must be mapped at x >= {}.".format(task, app_name, x, y, self.__osz_desc(), osz_x + 1)
+				)
+			pinned_rows.append(y)
+
+		if secure and pinned_rows:
+			span = max(pinned_rows) - min(pinned_rows) + 1
+			if span > rows_needed:
+				raise Exception(
+					"Secure app {} claims {} region row(s), but its static mapping spans rows {} to {}.".format(
+						app_name, rows_needed, min(pinned_rows), max(pinned_rows)
+					)
 				)
 
 	def __is_obsolete(self):

@@ -132,7 +132,8 @@ class Testcase:
 		"""Parses hw.osz_window: [X, Y].
 
 		The region always starts at PE 0,0 and covers x in [0, X-1] and
-		y in [0, Y-1]; e.g. [3,2] covers 0,0 0,1 1,0 1,1 2,0 2,1.
+		y in [0, Y-1]; e.g. [3,2] covers 0,0 0,1 1,0 1,1 2,0 2,1. Column X
+		stays free; non-secure tasks may only use x >= X+1.
 		Returns (X, Y), or None when the key is absent (region disabled).
 		"""
 		window = yaml["hw"].get("osz_window")
@@ -149,11 +150,14 @@ class Testcase:
 		if x < 1 or y < 1:
 			raise Exception("hw.osz_window sizes must be at least 1, got: [{}, {}]".format(x, y))
 
-		# At least one column must stay free to the right of the region
-		if x > self.PKG_N_PE_X - 1:
+		# Column X, right of the region, must stay free, and at least one column
+		# x >= X+1 must remain for the management and non-secure applications
+		if x > self.PKG_N_PE_X - 2:
 			raise Exception(
-				"hw.osz_window X = {} leaves no free column on the {}x{} mesh. "
-				"X must be at most {}.".format(x, self.PKG_N_PE_X, self.PKG_N_PE_Y, self.PKG_N_PE_X - 1)
+				"hw.osz_window X = {} leaves no column for non-secure applications on the {}x{} mesh: "
+				"column {} must stay free and non-secure tasks need x >= {}. X must be at most {}.".format(
+					x, self.PKG_N_PE_X, self.PKG_N_PE_Y, x, x + 1, self.PKG_N_PE_X - 2
+				)
 			)
 
 		if y > self.PKG_N_PE_Y:
