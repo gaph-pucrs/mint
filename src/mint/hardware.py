@@ -47,6 +47,9 @@ class Hardware:
 		osz_x, osz_y = self.osz_window if self.osz_window is not None else (0, 0)
 		definitions.define("logic [15:0] OSZ_WINDOW", "16'h{:02x}{:02x}".format(osz_x, osz_y))
 
+		# Simulation-only OSZ zone attack test (sim/OszAttacker.sv), off by default
+		definitions.define("bit OSZ_ATTACK", int(self.__param_or_default("OSZ_ATTACK", "False") == "True"))
+
 		definitions.macro("RAM_DEBUG",				self.__param_or_default("RAM_DEBUG",     "False") == "True")
 		definitions.macro("RS5_DEBUG",				self.__param_or_default("RS5_DEBUG",     "False") == "True")
 		definitions.define("UART_DEBUG",    	int(self.__param_or_default("UART_DEBUG",     "True") == "True"))
