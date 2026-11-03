@@ -15,8 +15,9 @@ class Hardware:
 		n_pe_x, 
 		n_pe_y, 
 		peripherals, 
-		links, 
-		parameters
+		links,
+		parameters,
+		osz_window=None
 	):
 		self.platform_path 			= platform_path
 		self.testcase_path 			= testcase_path
@@ -28,6 +29,7 @@ class Hardware:
 		self.peripherals			= peripherals
 		self.links					= links
 		self.parameters				= parameters
+		self.osz_window				= osz_window	# (X, Y) anchored at 0,0, or None
 
 	def copy(self):
 		copytree("{}/Phivers".format(self.platform_path), "{}/Phivers".format(self.testcase_path), dirs_exist_ok=1)
@@ -40,6 +42,10 @@ class Hardware:
 		definitions.define("TASKS_PER_PE", str(self.PKG_MAX_LOCAL_TASKS))
 		definitions.define("IMEM_PAGE_SZ", str(self.PKG_PAGE_SIZE_INST))
 		definitions.define("DMEM_PAGE_SZ", str(self.PKG_PAGE_SIZE_DATA))
+
+		# OSZ reserved region size, 0xXXYY anchored at PE 0,0; 0x0000 = disabled
+		osz_x, osz_y = self.osz_window if self.osz_window is not None else (0, 0)
+		definitions.define("logic [15:0] OSZ_WINDOW", "16'h{:02x}{:02x}".format(osz_x, osz_y))
 
 		definitions.macro("RAM_DEBUG",				self.__param_or_default("RAM_DEBUG",     "False") == "True")
 		definitions.macro("RS5_DEBUG",				self.__param_or_default("RS5_DEBUG",     "False") == "True")
