@@ -31,6 +31,9 @@ class Testcase:
 		self.PKG_PAGE_SIZE_DATA 	= yaml["hw"]["page_size_data_KB"] * 1024
 		PKG_MAX_LOCAL_TASKS	= yaml["hw"]["tasks_per_PE"]
 
+		# OSZ reserved region: (X, Y) size anchored at PE 0,0, or None when absent
+		self.osz_window = self.__load_osz_window(yaml)
+
 		self.simulator = "verilator"
 		try:
 			self.simulator = yaml["simulation"]["simulator"]
@@ -49,6 +52,8 @@ class Testcase:
 			y = int(peripheral["pe"][2])
 			port = self.__port_code(peripheral["port"])
 			peripherals[peripheral["name"]] = ((x, y), port)
+
+		self.__check_osz_peripherals(peripherals)
 
 		links = []
 		try:
@@ -76,8 +81,9 @@ class Testcase:
 			self.PKG_N_PE_X, 
 			self.PKG_N_PE_Y, 
 			peripherals, 
-			links, 
-			parameters
+			links,
+			parameters,
+			osz_window=self.osz_window
 		)
 
 		self.management = Management(self.platform_path, self.base_dir)
@@ -121,6 +127,63 @@ class Testcase:
 		self.management.check_size(self.PKG_PAGE_SIZE_INST, self.PKG_PAGE_SIZE_DATA)
 
 		print("Testcase built.")
+
+	def __load_osz_window(self, yaml):
+		"""Parses hw.osz_window: [X, Y].
+
+		The region always starts at PE 0,0 and covers x in [0, X-1] and
+		y in [0, Y-1]; e.g. [3,2] covers 0,0 0,1 1,0 1,1 2,0 2,1. Column X
+		stays free; non-secure tasks may only use x >= X+1.
+		Returns (X, Y), or None when the key is absent (region disabled).
+		"""
+		window = yaml["hw"].get("osz_window")
+		if window is None:
+			return None
+
+		if (
+			not isinstance(window, list) or len(window) != 2 or
+			not all(isinstance(v, int) and not isinstance(v, bool) for v in window)
+		):
+			raise Exception("hw.osz_window must be [X, Y] with integer sizes, got: {}".format(window))
+
+		x, y = window
+		if x < 1 or y < 1:
+			raise Exception("hw.osz_window sizes must be at least 1, got: [{}, {}]".format(x, y))
+
+		# Column X, right of the region, must stay free, and at least one column
+		# x >= X+1 must remain for the management and non-secure applications
+		if x > self.PKG_N_PE_X - 2:
+			raise Exception(
+				"hw.osz_window X = {} leaves no column for non-secure applications on the {}x{} mesh: "
+				"column {} must stay free and non-secure tasks need x >= {}. X must be at most {}.".format(
+					x, self.PKG_N_PE_X, self.PKG_N_PE_Y, x, x + 1, self.PKG_N_PE_X - 2
+				)
+			)
+
+		if y > self.PKG_N_PE_Y:
+			raise Exception(
+				"hw.osz_window Y = {} does not fit inside the {}x{} mesh.".format(
+					y, self.PKG_N_PE_X, self.PKG_N_PE_Y
+				)
+			)
+
+		return (x, y)
+
+	def __check_osz_peripherals(self, peripherals):
+		"""No peripheral may sit on a PE inside the OSZ region: a sealed zone
+		would cut it off from the rest of the mesh."""
+		if self.osz_window is None:
+			return
+
+		osz_x, osz_y = self.osz_window
+		for name, ((x, y), _port) in peripherals.items():
+			if x < osz_x and y < osz_y:
+				raise Exception(
+					"Peripheral {} at PE {},{} is inside the OSZ region [{}, {}] "
+					"(PEs 0,0 to {},{}). Move it outside the region.".format(
+						name, x, y, osz_x, osz_y, osz_x - 1, osz_y - 1
+					)
+				)
 
 	def __is_obsolete(self):
 		if exists(self.file):

@@ -34,6 +34,8 @@ class Simulation:
         # Clear files that are written in append mode
         open("{}/debug/scheduling_report.txt".format(scenario_path), 'w').close()
         open("{}/debug/traffic_router.txt"   .format(scenario_path), 'w').close()
+        open("{}/debug/sr_trace.txt"         .format(scenario_path), 'w').close()
+        open("{}/debug/osz_trace.txt"        .format(scenario_path), 'w').close()
 
     def run(self):
         make_env = environ.copy()

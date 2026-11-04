@@ -38,10 +38,19 @@ class Scenario:
 		except:
 			pass
 
+		# OSZ region (X, Y) anchored at PE 0,0, already validated by the testcase; None when absent
+		osz_window = tc_yaml["hw"].get("osz_window")
+		self.osz_window = tuple(osz_window) if osz_window is not None else None
+		self.PKG_N_PE_X = tc_yaml["hw"]["mpsoc_dimension"][0]
+		self.PKG_N_PE_Y = tc_yaml["hw"]["mpsoc_dimension"][1]
+		self.PKG_MAX_LOCAL_TASKS = tc_yaml["hw"]["tasks_per_PE"]
+
 		self.ma_tasks = []
 
 		for task in yaml["management"]:
 			self.ma_tasks.append(task)
+
+		self.__check_osz_management()
 
 		self.links = []
 		try:
@@ -58,33 +67,47 @@ class Scenario:
 		apps_dir = "{}/applications".format(testcase_path)
 		self.applications = []
 
-		try:
-			for app in yaml["apps"]:
-				app_name = app["name"]
+		# A missing or empty apps list means no applications; any other error
+		# in an entry must surface instead of silently dropping every app.
+		for app in (yaml.get("apps") or []):
+			app_name = app["name"]
 
-				app_inst = "default"
-				try:
-					app_inst = app["instance"]
-				except:
-					pass
+			app_inst = "default"
+			try:
+				app_inst = app["instance"]
+			except:
+				pass
 
-				start_ms = 0
-				try:
-					start_ms = app["start_time_ms"]
-				except:
-					print("Using 0 ms as starting time for app {}".format(app_name))
+			start_ms = 0
+			try:
+				start_ms = app["start_time_ms"]
+			except:
+				print("Using 0 ms as starting time for app {}".format(app_name))
 
-				mapping = []
-				try:
-					mapping = app["static_mapping"]
-				except:
-					print("Using pure dinamic mapping for app {}".format(app_name))
-					
-				self.applications.append(Application(app_name, app_inst, platform_path, apps_dir, testcase_path, start_ms=start_ms, mapping=mapping))
+			mapping = []
+			try:
+				mapping = app["static_mapping"]
+			except:
+				print("Using pure dinamic mapping for app {}".format(app_name))
 
-			self.applications.sort(key=lambda x: x.start_ms) # Sort by start time
-		except:
-			pass
+			secure = app.get("secure", False)
+			if not isinstance(secure, bool):
+				raise Exception("apps[].secure of app {} must be a boolean, got: {}".format(app_name, secure))
+
+			if secure and self.osz_window is None:
+				print(
+					"WARNING: app {} is secure but the testcase has no hw.osz_window. "
+					"Running it as non-secure.".format(app_name)
+				)
+				secure = False
+
+			application = Application(app_name, app_inst, platform_path, apps_dir, testcase_path, start_ms=start_ms, mapping=mapping, secure=secure)
+
+			self.__check_osz_app(app_name, len(application.get_tasks()), mapping, secure)
+
+			self.applications.append(application)
+
+		self.applications.sort(key=lambda x: x.start_ms) # Sort by start time
 
 		print("Scenario {}.yaml loaded.".format(name))
 		
@@ -132,6 +155,7 @@ class Scenario:
 		for app in self.applications:
 			start.add(app.get_full_name(), "App name")
 			start.add(app.start_ms, "Start time (ms)")
+			start.add(1 if app.secure else 0, "Secure" if app.secure else "Not secure")
 
 			tasks = app.get_tasks()
 			for task in app.mapping:
@@ -253,6 +277,87 @@ class Scenario:
 
 		cfg.close()
   
+	def __in_osz(self, x, y):
+		return self.osz_window is not None and x < self.osz_window[0] and y < self.osz_window[1]
+
+	def __osz_desc(self):
+		return "[{}, {}] (PEs 0,0 to {},{})".format(
+			self.osz_window[0], self.osz_window[1], self.osz_window[0] - 1, self.osz_window[1] - 1
+		)
+
+	def __check_osz_management(self):
+		"""Management tasks are never secure: like non-secure tasks they may only
+		be pinned at x >= X+1 (column X, right of the region, stays free)."""
+		if self.osz_window is None:
+			return
+
+		first_x = self.osz_window[0] + 1
+		for task in self.ma_tasks:
+			if "static_mapping" not in task:
+				continue	# Reported later: every management task must be statically mapped
+			x, y = int(task["static_mapping"][0]), int(task["static_mapping"][1])
+			if x < first_x:
+				raise Exception(
+					"Management task {} is statically mapped to PE {},{}. With the OSZ region {} "
+					"management tasks must be mapped at x >= {}.".format(task["task"], x, y, self.__osz_desc(), first_x)
+				)
+
+	def __check_osz_app(self, app_name, task_cnt, mapping, secure):
+		"""Placement and capacity rules of the OSZ region.
+
+		Secure apps claim whole region rows (X PEs each) and may only be pinned
+		inside the rows they claim. Non-secure apps may only use x >= X+1.
+		An app that does not fit its side would never be mapped.
+		"""
+		if self.osz_window is None:
+			return
+
+		osz_x, osz_y = self.osz_window
+		tpp = self.PKG_MAX_LOCAL_TASKS
+
+		if secure:
+			row_slots = osz_x * tpp
+			rows_needed = -(-task_cnt // row_slots)	# ceil
+			if rows_needed > osz_y:
+				raise Exception(
+					"Secure app {} has {} tasks and needs {} region row(s) of {} slot(s), "
+					"but the OSZ region {} has {} row(s).".format(
+						app_name, task_cnt, rows_needed, row_slots, self.__osz_desc(), osz_y
+					)
+				)
+		else:
+			cols = self.PKG_N_PE_X - osz_x - 1
+			capacity = cols * self.PKG_N_PE_Y * tpp
+			if task_cnt > capacity:
+				raise Exception(
+					"Non-secure app {} has {} tasks, but only {} slot(s) exist at x >= {} "
+					"with the OSZ region {}.".format(app_name, task_cnt, capacity, osz_x + 1, self.__osz_desc())
+				)
+
+		pinned_rows = []
+		for task in mapping:
+			x, y = int(mapping[task][0]), int(mapping[task][1])
+			if secure and not self.__in_osz(x, y):
+				raise Exception(
+					"Task {} of secure app {} is statically mapped to PE {},{}, outside the OSZ region {}. "
+					"Secure apps must be mapped inside it.".format(task, app_name, x, y, self.__osz_desc())
+				)
+			if not secure and x <= osz_x:
+				raise Exception(
+					"Task {} of non-secure app {} is statically mapped to PE {},{}. With the OSZ region {} "
+					"non-secure apps must be mapped at x >= {}.".format(task, app_name, x, y, self.__osz_desc(), osz_x + 1)
+				)
+			pinned_rows.append(y)
+
+		if secure and pinned_rows:
+			span = max(pinned_rows) - min(pinned_rows) + 1
+			if span > rows_needed:
+				raise Exception(
+					"Secure app {} claims {} region row(s), but its static mapping spans rows {} to {}.".format(
+						app_name, rows_needed, min(pinned_rows), max(pinned_rows)
+					)
+				)
+
 	def __is_obsolete(self):
 		if exists(self.file):
 			if not cmp(self.base, self.file):

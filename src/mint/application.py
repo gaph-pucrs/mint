@@ -8,14 +8,15 @@ from yaml import safe_load
 from hashlib import blake2s
 
 class Application:
-	def __init__(self, app_name, instance, platform_path, base_path, testcase_path, definitions=None, start_ms=None, mapping=None):
+	def __init__(self, app_name, instance, platform_path, base_path, testcase_path, definitions=None, start_ms=None, mapping=None, secure=False):
 		self.app_name = app_name
 		self.testcase_path = testcase_path
 
 		self.definitions = definitions
 		self.start_ms = start_ms
 		self.mapping = mapping
-   
+		self.secure = secure	# Per-instance: this instance must run inside the OSZ region
+
 		self.instance = instance
 		self.source_path = "{}/applications/{}".format(platform_path, self.app_name)
 		self.base_path = base_path
