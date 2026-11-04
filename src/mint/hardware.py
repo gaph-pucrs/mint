@@ -50,6 +50,13 @@ class Hardware:
 		# Simulation-only OSZ zone attack test (sim/OszAttacker.sv), off by default
 		definitions.define("bit OSZ_ATTACK", int(self.__param_or_default("OSZ_ATTACK", "False") == "True"))
 
+		# Simulation-only trace monitors, bound from PhiversTB (never instantiated by the RTL).
+		# Both follow TRAFFIC_DEBUG unless set: SR_TRACE writes debug/sr_trace.txt (every packet,
+		# for tools/meshviz), OSZ_TRACE writes debug/osz_trace.txt (zone wrapper and kernel OSZ events)
+		traffic_debug = self.__param_or_default("TRAFFIC_DEBUG", "True")
+		definitions.macro("SR_TRACE",				self.__param_or_default("SR_TRACE",  traffic_debug) == "True")
+		definitions.macro("OSZ_TRACE",				self.__param_or_default("OSZ_TRACE", traffic_debug) == "True")
+
 		definitions.macro("RAM_DEBUG",				self.__param_or_default("RAM_DEBUG",     "False") == "True")
 		definitions.macro("RS5_DEBUG",				self.__param_or_default("RS5_DEBUG",     "False") == "True")
 		definitions.define("UART_DEBUG",    	int(self.__param_or_default("UART_DEBUG",     "True") == "True"))
