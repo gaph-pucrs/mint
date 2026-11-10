@@ -49,8 +49,7 @@ class Applications:
 		tc_name = tc_name[len(tc_name) - 1]
 
 		tc_yaml = safe_load(open("{}/{}.yaml".format(self.testcase_path, tc_name), "r"))
-		self.size_inst		= tc_yaml["hw"]["page_size_inst_KB"]*1024
-		self.size_data		= tc_yaml["hw"]["page_size_data_KB"]*1024
+		self.page_size		= tc_yaml["hw"]["page_size_KB"]*1024
 
 	def copy(self):
 		if self.__is_obsolete():
@@ -68,7 +67,7 @@ class Applications:
 			self.applications[app].build()
 
 		for app in self.applications:
-			self.applications[app].check_size(self.size_inst, self.size_data)
+			self.applications[app].check_size(self.page_size)
 
 		for app in self.applications:
 			self.applications[app].generate_descr(repodebug)

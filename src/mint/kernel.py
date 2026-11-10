@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 from shutil import copytree, copyfile
-from subprocess import run, check_output
+from subprocess import run
 from multiprocessing import cpu_count
+from .sizes import elf_sizes
 
 class Kernel:
 	def __init__(self, platform_path, testcase_path):
@@ -18,22 +19,12 @@ class Kernel:
 		if make.returncode != 0:
 			raise Exception("Error building kernel.")
 
-	def check_size(self, size_inst, size_data):
-		path = "{}/MAestro/kernel.elf".format(self.testcase_path)
+	def check_size(self, page_size):
+		sizes = elf_sizes("{}/MAestro/kernel.elf".format(self.testcase_path))
+		used  = sum(sizes.values())
 
-		out = check_output(["riscv64-elf-size", path, "-G"]).split(b'\n')[1].split(b'\t')[0].split(b' ')
-		out = list(filter(lambda c: c != b'', out))
-
-		isize = int(out[0])
-		dsize = int(out[1]) + int(out[2])
-					
 		print("\n*************************** Kernel page size report ***************************")
-		if isize <= size_inst and dsize <= size_data:
-			print("Kernel instruction memory usage {}/{} bytes".format(str(isize).rjust(34), str(size_inst).ljust(6)))
-			print("Kernel        data memory usage {}/{} bytes".format(str(dsize).rjust(34), str(size_data).ljust(6)))
-		else:
-			if isize > size_inst:
-				raise Exception("Kernel instruction memory usage of {} is bigger than page size of {}".format(isize, size_inst))
-			else:
-				raise Exception("Kernel data memory usage of {} is bigger than page size of {}".format(dsize, size_data))
+		if used > page_size:
+			raise Exception("Kernel memory usage of {} is bigger than page size of {}".format(used, page_size))
+		print("Kernel memory usage {}/{} bytes".format(str(used).rjust(45), str(page_size).ljust(6)))
 		print("************************* End kernel page size report *************************")

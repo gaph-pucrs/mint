@@ -29,9 +29,6 @@ class Scenario:
 		tc_name = tc_name[len(tc_name) - 1]
 
 		tc_yaml = safe_load(open("{}/{}.yaml".format(self.testcase_path, tc_name), "r"))
-		self.PKG_PAGE_SIZE_INST 	= tc_yaml["hw"]["page_size_inst_KB"] * 1024
-		self.PKG_PAGE_SIZE_DATA 	= tc_yaml["hw"]["page_size_data_KB"] * 1024
-
 		self.simulator = "verilator"
 		try:
 			self.simulator = tc_yaml["simulation"]["simulator"]

@@ -9,8 +9,7 @@ class Hardware:
 		self, 
 		platform_path, 
 		testcase_path, 
-		page_size_inst, 
-		page_size_data, 
+		page_size, 
 		max_local_tasks, 
 		n_pe_x, 
 		n_pe_y, 
@@ -20,8 +19,7 @@ class Hardware:
 	):
 		self.platform_path 			= platform_path
 		self.testcase_path 			= testcase_path
-		self.PKG_PAGE_SIZE_INST		= page_size_inst
-		self.PKG_PAGE_SIZE_DATA		= page_size_data
+		self.PKG_PAGE_SIZE			= page_size
 		self.PKG_MAX_LOCAL_TASKS 	= max_local_tasks
 		self.PKG_N_PE_X 			= n_pe_x
 		self.PKG_N_PE_Y 			= n_pe_y
@@ -38,8 +36,7 @@ class Hardware:
 		definitions.define("N_PE_X", str(self.PKG_N_PE_X))
 		definitions.define("N_PE_Y", str(self.PKG_N_PE_Y))
 		definitions.define("TASKS_PER_PE", str(self.PKG_MAX_LOCAL_TASKS))
-		definitions.define("IMEM_PAGE_SZ", str(self.PKG_PAGE_SIZE_INST))
-		definitions.define("DMEM_PAGE_SZ", str(self.PKG_PAGE_SIZE_DATA))
+		definitions.define("PAGE_SZ", str(self.PKG_PAGE_SIZE))
 
 		definitions.macro("RAM_DEBUG",				self.__param_or_default("RAM_DEBUG",     "False") == "True")
 		definitions.macro("RS5_DEBUG",				self.__param_or_default("RS5_DEBUG",     "False") == "True")
@@ -48,8 +45,13 @@ class Hardware:
 		definitions.define("PIPE_DEBUG",    	int(self.__param_or_default("PIPE_DEBUG",     "True") == "True"))
 		definitions.define("TRAFFIC_DEBUG", 	int(self.__param_or_default("TRAFFIC_DEBUG",  "True") == "True"))
 		definitions.define("DMNI_DEBUG",    	int(self.__param_or_default("DMNI_DEBUG",    "False") == "True"))
-		definitions.define("MEM_PROFILE",   	int(self.__param_or_default("MEM_PROFILE",   "False") == "True"))
-		definitions.define("MEM_PROFILE_BLOCK", int(self.__param_or_default("MEM_PROFILE_BLOCK", 4096)))
+		mem_profile       = self.__param_or_default("MEM_PROFILE", "False") == "True"
+		mem_profile_block = int(self.__param_or_default("MEM_PROFILE_BLOCK", 4096))
+		if mem_profile and self.PKG_PAGE_SIZE % mem_profile_block != 0:
+			raise Exception("Page size of {} bytes is not a multiple of MEM_PROFILE_BLOCK ({})".format(self.PKG_PAGE_SIZE, mem_profile_block))
+
+		definitions.define("MEM_PROFILE",   	int(mem_profile))
+		definitions.define("MEM_PROFILE_BLOCK", mem_profile_block)
 		definitions.define("SAFE_DEBUG",    	int(self.__param_or_default("SAFE_DEBUG",     "True") == "True"))
 		definitions.define("VEnable", 			int(self.__param_or_default("VEnable",       "False") == "True"))
 		definitions.define("VLEN",   			int(self.__param_or_default("VLEN",              64)))

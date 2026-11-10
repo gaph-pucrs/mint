@@ -6,6 +6,7 @@ from multiprocessing import cpu_count
 from .repository import Repository
 from yaml import safe_load
 from hashlib import blake2s
+from .sizes import elf_sizes
 
 class Application:
 	def __init__(self, app_name, instance, platform_path, base_path, testcase_path, definitions=None, start_ms=None, mapping=None):
@@ -67,48 +68,23 @@ class Application:
 		if make.returncode != 0:
 			raise Exception("Error building application {}.".format(self.app_name))
 
-	def check_size(self, size_inst, size_data):
-		self.text_sizes = {}
-		self.data_sizes = {}
-		self.bss_sizes	= {}
+	def check_size(self, page_size):
 		self.entry_points = {}
+		used = {}
 
 		for task in self.tasks:
 			path = "{}/{}/{}.elf".format(self.base_path, self.app_path, task)
 
-			out = check_output(["riscv64-elf-size", path, "-G"]).split(b'\n')[1].split(b'\t')[0].split(b' ')
-			out = list(filter(lambda c: c != b'', out))
-
-			self.text_sizes[task] = int(out[0])
-			self.data_sizes[task] = int(out[1])
-
-			# `size` reports raw section sizes, missing any alignment padding the
-			# linker inserts between .data and .bss. The kernel computes the heap
-			# start as MMR_DATA_BASE + data_size + bss_size, so derive bss_size
-			# from the linker symbols instead: __bss_start == _edata (end of
-			# .data), thus _end - __bss_start includes the padding.
-			syms = {}
-			for line in check_output(["riscv64-elf-nm", path]).decode().splitlines():
-				fields = line.split()
-				if len(fields) == 3:
-					syms[fields[2]] = int(fields[0], 16)
-			self.bss_sizes[task] = syms["_end"] - syms["__bss_start"]
+			used[task] = sum(elf_sizes(path).values())
 
 			out = check_output(["riscv64-elf-readelf", path, "-h"]).split(b'\n')[10].split(b' ')[-1]
 			self.entry_points[task] = int(out, 16)
 			
 		print("\n******************** {} page size report ********************".format(self.app_name.center(20)))
 		for task in self.tasks:
-			isize = self.text_sizes[task]
-			dsize = self.data_sizes[task] + self.bss_sizes[task]
-			if isize <= size_inst and dsize <= size_data:
-				print("Task {} instruction memory usage {}/{} bytes".format(task.rjust(29), str(isize).rjust(6), str(size_inst).ljust(6)))
-				print("Task {}        data memory usage {}/{} bytes".format(task.rjust(29), str(dsize).rjust(6), str(size_data).ljust(6)))
-			else:
-				if isize > size_inst:
-					raise Exception("Task {} instruction memory usage of {} is bigger than page size of {}".format(task, isize, size_inst))
-				else:
-					raise Exception("Task {} data memory usage of {} is bigger than page size of {}".format(task, dsize, size_data))
+			if used[task] > page_size:
+				raise Exception("Task {} memory usage of {} is bigger than page size of {}".format(task, used[task], page_size))
+			print("Task {} memory usage {}/{} bytes".format(task.rjust(29), str(used[task]).rjust(6), str(page_size).ljust(6)))
 		print("****************** End {} page size report ******************".format(self.app_name.center(20)))
 
 	def generate_descr(self, repodebug):

@@ -27,8 +27,7 @@ class Testcase:
 
 		self.PKG_N_PE_X = yaml["hw"]["mpsoc_dimension"][0]
 		self.PKG_N_PE_Y = yaml["hw"]["mpsoc_dimension"][1]
-		self.PKG_PAGE_SIZE_INST 	= yaml["hw"]["page_size_inst_KB"] * 1024
-		self.PKG_PAGE_SIZE_DATA 	= yaml["hw"]["page_size_data_KB"] * 1024
+		self.PKG_PAGE_SIZE 	= yaml["hw"]["page_size_KB"] * 1024
 		PKG_MAX_LOCAL_TASKS	= yaml["hw"]["tasks_per_PE"]
 
 		self.simulator = "verilator"
@@ -70,8 +69,7 @@ class Testcase:
 		self.hardware = Hardware(
 			self.platform_path, 
 			self.base_dir, 
-			self.PKG_PAGE_SIZE_INST, 
-			self.PKG_PAGE_SIZE_DATA, 
+			self.PKG_PAGE_SIZE, 
 			PKG_MAX_LOCAL_TASKS, 
 			self.PKG_N_PE_X, 
 			self.PKG_N_PE_Y, 
@@ -117,8 +115,8 @@ class Testcase:
 
 		self.hardware.build(self.simulator, self.trace)
 
-		self.kernel.check_size(self.PKG_PAGE_SIZE_INST, self.PKG_PAGE_SIZE_DATA)
-		self.management.check_size(self.PKG_PAGE_SIZE_INST, self.PKG_PAGE_SIZE_DATA)
+		self.kernel.check_size(self.PKG_PAGE_SIZE)
+		self.management.check_size(self.PKG_PAGE_SIZE)
 
 		print("Testcase built.")
 
