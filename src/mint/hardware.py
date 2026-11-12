@@ -32,6 +32,10 @@ class Hardware:
 		self.__generate_definitions()
 
 	def __generate_definitions(self):
+		mem_size = self.PKG_PAGE_SIZE * (self.PKG_MAX_LOCAL_TASKS + 1)
+		if mem_size > 2**31:
+			raise Exception("PE memory of {} bytes ({} KB page x {} pages) exceeds the 2 GB address window".format(mem_size, self.PKG_PAGE_SIZE // 1024, self.PKG_MAX_LOCAL_TASKS + 1))
+
 		definitions = HardwareDefinitions()
 		definitions.define("N_PE_X", str(self.PKG_N_PE_X))
 		definitions.define("N_PE_Y", str(self.PKG_N_PE_Y))
