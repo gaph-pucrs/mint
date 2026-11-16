@@ -44,11 +44,11 @@ class Hardware:
 
 		definitions.macro("RAM_DEBUG",				self.__param_or_default("RAM_DEBUG",     "False") == "True")
 		definitions.macro("RS5_DEBUG",				self.__param_or_default("RS5_DEBUG",     "False") == "True")
-		definitions.define("UART_DEBUG",    	int(self.__param_or_default("UART_DEBUG",     "True") == "True"))
-		definitions.define("SCHED_DEBUG",   	int(self.__param_or_default("SCHED_DEBUG",    "True") == "True"))
-		definitions.define("PIPE_DEBUG",    	int(self.__param_or_default("PIPE_DEBUG",     "True") == "True"))
-		definitions.define("TRAFFIC_DEBUG", 	int(self.__param_or_default("TRAFFIC_DEBUG",  "True") == "True"))
-		definitions.define("DMNI_DEBUG",    	int(self.__param_or_default("DMNI_DEBUG",    "False") == "True"))
+		definitions.macro("UART_DEBUG",		self.__param_or_default("UART_DEBUG", "True") == "True")
+		definitions.macro("SCHED_DEBUG",		self.__param_or_default("SCHED_DEBUG", "True") == "True")
+		definitions.macro("PIPE_DEBUG",		self.__param_or_default("PIPE_DEBUG", "True") == "True")
+		definitions.macro("TRAFFIC_DEBUG",		self.__param_or_default("TRAFFIC_DEBUG", "True") == "True")
+		definitions.macro("DMNI_DEBUG",		self.__param_or_default("DMNI_DEBUG", "False") == "True")
 		mem_profile       = self.__param_or_default("MEM_PROFILE", "False") == "True"
 		mem_profile_block = int(self.__param_or_default("MEM_PROFILE_BLOCK", 4096))
 		if mem_profile and self.PKG_PAGE_SIZE % mem_profile_block != 0:
@@ -56,7 +56,7 @@ class Hardware:
 
 		definitions.define("MEM_PROFILE",   	int(mem_profile))
 		definitions.define("MEM_PROFILE_BLOCK", mem_profile_block)
-		definitions.define("SAFE_DEBUG",    	int(self.__param_or_default("SAFE_DEBUG",     "True") == "True"))
+		definitions.macro("SAFE_DEBUG",		self.__param_or_default("SAFE_DEBUG", "True") == "True")
 		definitions.define("VEnable", 			int(self.__param_or_default("VEnable",       "False") == "True"))
 		definitions.define("VLEN",   			int(self.__param_or_default("VLEN",              64)))
 
